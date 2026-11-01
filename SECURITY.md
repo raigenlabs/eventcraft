@@ -1,0 +1,12 @@
+# Security Policy & Architecture
+
+EventCraft enforces multi-layered defense-in-depth security across both client and server:
+
+* **Threat Model & Surface Minimization**: EventCraft operates without persistent user accounts, passwords, or payment gateways. Application plans persist locally within the user's browser via guarded `localStorage`, completely eliminating cross-tenant data leaks and unauthorized data aggregation.
+* **Server-Side API Key Isolation**: The `@google/genai` SDK is imported exclusively in `server/ai/geminiClient.ts`. No Gemini API keys, secrets, or provider tokens are bundled or exposed in client bundles or network requests.
+* **Bi-directional Input Sanitization & Strict Validation**: All user inputs (names, dates, counts, currency, budget minor units, notes) are sanitized and validated through non-throwing pure functions (`shared/sanitize.ts` and `shared/validation.ts`) on the client and strictly re-validated upon ingestion by the Express server.
+* **Token Bucket Rate Limiting**: All GenAI endpoints (`/api/ideas-stream`, `/api/assistant-stream`, `/api/summary-stream`, `/api/vendor-guidance`) are protected by a token-bucket rate limiter per IP (`server/middleware/rateLimit.ts`) with bounded memory and stale bucket eviction, preventing resource exhaustion and runaway costs.
+* **Strict Production Content Security Policy (CSP)**: In production, HTTP responses enforce an exact CSP restricting script, connect, style, and frame ancestors (`frame-ancestors 'self' https://*.google.com https://*.studio.google https://*.aistudio.google https://ai.studio https://*.run.app;`), disallowing `unsafe-eval` and blocking unapproved third-party assets.
+* **Prompt Injection Defense**: Untrusted user inputs are encapsulated within explicit `<user_input>` delimiters accompanied by system prompt directives instructing models to treat inputs purely as data rather than executable instructions.
+* **Untrusted Model Output Rendering**: Generative model outputs are treated as untrusted plain text. Text chunks are rendered strictly through standard React text nodes (`whitespace-pre-wrap`), completely avoiding `dangerouslySetInnerHTML` or HTML injection vulnerabilities.
+* **Uniform Error Sanitization**: Centralized server error middleware (`server/middleware/errors.ts`) returns consistent, structured error payloads (`{ error, code }`) and suppresses internal error traces or vendor stack messages from reaching clients.
